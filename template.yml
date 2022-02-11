@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Description: "Website redirect"
+
+Parameters:
+  RedirectStatusCode:
+    Type: String
+    Description: "The redirect status code"
+    Default: "307"
+    AllowedValues:
+      - '301'
+      - '302'
+      - '307'
+  RedirectStatusDescription:
+    Type: String
+    Description: "The redirect status description"
+    Default: "Temporary Redirect"
+  RedirectUrl:
+    Type: String
+    Description: "The redirect URL"
+  AcmCertificateArn:
+    Type: String
+    Description: "The certificate arn for the domain name provided"
+  CloudFrontAliases:
+    Type: CommaDelimitedList
+    Description: "The endpoint aliases valid for provided certificate"
+  CloudFrontPriceClass:
+    Type: String
+    Description: "The price class for CloudFront distribution"
+    Default: "PriceClass_100"
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+Resources:
+  RedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties: 
+      Name: !Sub "${AWS::StackName}-redirect"
+      AutoPublish: true
+      FunctionCode: !Sub |
+        function handler() {
+          return {
+            statusCode: ${RedirectStatusCode},
+            statusDescription: '${RedirectStatusDescription}',
+            headers: { location: { value: '${RedirectUrl}' } }
+          }
+        }
+      FunctionConfig: 
+        Comment: !Sub "redirect all requests to ${RedirectUrl}"
+        Runtime: cloudfront-js-1.0
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: 'true'
+        Comment: !Ref AWS::StackName
+        Origins:
+          - DomainName: aws.amazon.com
+            Id: origin
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: "https-only"
+        DefaultCacheBehavior:
+          TargetOriginId: origin
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+          ViewerProtocolPolicy: redirect-to-https
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RedirectFunction.FunctionMetadata.FunctionARN
+        PriceClass: !Ref CloudFrontPriceClass
+        Aliases: !Ref CloudFrontAliases
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+
+Outputs:
+  CloudFrontDistribution:
+    Description: "The CloudFront distribution that return redirect response"
+    Value: !Ref Distribution
