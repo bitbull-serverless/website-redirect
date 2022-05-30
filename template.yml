@@ -41,11 +41,19 @@ Resources:
       Name: !Sub "${AWS::StackName}-redirect"
       AutoPublish: true
       FunctionCode: !Sub |
-        function handler() {
+        function handler(event) {
+          var request = event.request;
+
+          var redirectUrl = '${RedirectUrl}';
+          if (redirectUrl.endsWith('/')) {
+            redirectUrl = redirectUrl.slice(0, -1);
+          }
+          redirectUrl += request.uri;
+
           return {
             statusCode: ${RedirectStatusCode},
             statusDescription: '${RedirectStatusDescription}',
-            headers: { location: { value: '${RedirectUrl}' } }
+            headers: { location: { value: redirectUrl.toString() } }
           }
         }
       FunctionConfig: 
